@@ -13,8 +13,10 @@
 #include <stdio.h>
 #include "main.h"
 
-// Function Prototype
-int LoRa_SendCommand_1000(const char *command, const char *expected);
-int LoRa_SendCommand(const char *command, const char *expected, uint32_t timeout);
+// Function definitions
+int LoRa_SendCommand_1000(char *command, char *expected);
+int LoRa_SendCommand(char *command, char *expected, uint32_t timeout);
+void LoRaWAN_Startup(void);
+void LoRaWAN_Send_msg(char *data, int set_1_for_hex);
 
 #endif /* SRC_UART_LORA_H_ */
