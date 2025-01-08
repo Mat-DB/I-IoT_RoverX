@@ -7,6 +7,13 @@
 
 #include "BLE.h"
 
+extern UART_HandleTypeDef huart2;
+extern I2C_HandleTypeDef hi2c1;
+
+extern uint32_t master_timer;
+extern uint32_t slave_timer;
+extern uint32_t wakeStartTime;
+
 bool slave_send_data_to_BLE(const char* data_string) {
     HAL_StatusTypeDef status;
 
@@ -16,12 +23,12 @@ bool slave_send_data_to_BLE(const char* data_string) {
     // Check transmission status
     if (status == HAL_OK) {
         #if UART_DEBUG
-        printf("Data sent to BLE: %s\r\n", data_string);
+        	printf("Data sent to BLE: %s\r\n", data_string);
         #endif
         return true;
     } else {
         #if UART_DEBUG
-        printf("Error in transmission: 0x%02X\r\n", status);
+        	printf("Error in transmission: 0x%02X\r\n", status);
         #endif
         // Attempt I2C Recovery
         HAL_I2C_DeInit(&hi2c1);
@@ -39,7 +46,9 @@ bool slave_receive_data_from_BLE(void) {
 
     if (status == HAL_OK) {
         buffer[sizeof(buffer)-1] = '\0';
-        printf("Received from BLE: %s\r\n", buffer);
+		#if UART_DEBUG
+        	printf("Received from BLE: %s\r\n", buffer);
+		#endif
 
         // Parse ACK and timer values
         if (strncmp((char*)buffer, "ACK_", 4) == 0) {
@@ -47,12 +56,16 @@ bool slave_receive_data_from_BLE(void) {
             if (sscanf((char*)buffer, "ACK_%lu_%lu", &m_timer, &s_timer) == 2) {
                 master_timer = m_timer;
                 slave_timer = s_timer;
-                printf("Parsed timers - Master: %lu, Slave: %lu\r\n", master_timer, slave_timer);
+				#if UART_DEBUG
+                	printf("Parsed timers - Master: %lu, Slave: %lu\r\n", master_timer, slave_timer);
+				#endif
                 return true;
             }
         }
     } else {
-        printf("Error receiving from BLE: %d\r\n", status);
+		#if UART_DEBUG
+    	        printf("Error receiving from BLE: %d\r\n", status);
+		#endif
         HAL_I2C_DeInit(&hi2c1);
         HAL_Delay(1);
         MX_I2C1_Init();
@@ -73,7 +86,9 @@ bool master_receive_data_from_BLE(void) {
 
         // Validate that we received actual sensor data (check for "T=" and "H=")
         if (strstr((char*)received_data, "T=") && strstr((char*)received_data, "H=")) {
-            printf("Received valid sensor data from BLE: %s\r\n", received_data);
+			#if UART_DEBUG
+        		printf("Received valid sensor data from BLE: %s\r\n", received_data);
+			#endif
             send_data_to_BLE_master();  // Only send ACK for valid data
             return true;
         }

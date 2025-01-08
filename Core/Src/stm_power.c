@@ -7,9 +7,19 @@
 
 #include "stm_power.h"
 
+extern RTC_HandleTypeDef hrtc;
+extern UART_HandleTypeDef huart2;
+extern I2C_HandleTypeDef hi2c1;
+
+extern uint32_t master_timer;
+extern uint32_t slave_timer;
+extern uint32_t wakeStartTime;
+
 void enterStandbyMode() {
     uint32_t totalWakeTime = HAL_GetTick() - wakeStartTime;
-    printf("Total wake time: %lu ms\r\n", totalWakeTime);
+	#if UART_DEBUG
+        printf("Total wake time: %lu ms\r\n", totalWakeTime);
+	#endif
     HAL_I2C_DeInit(&hi2c1);
 
     // Total delay in milliseconds
@@ -27,8 +37,10 @@ void enterStandbyMode() {
         rtc_wakeup_value = 1;  // Minimum value
     }
 
-    printf("Total delay: %lu ms, RTC ticks: %lu, Wakeup value: %lu\r\n",
+	#if UART_DEBUG
+    	printf("Total delay: %lu ms, RTC ticks: %lu, Wakeup value: %lu\r\n",
            total_delay_ms, delay_in_rtc_ticks, rtc_wakeup_value);
+	#endif
 
     HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
     if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, rtc_wakeup_value, RTC_WAKEUPCLOCK_RTCCLK_DIV16, 0) != HAL_OK) {
@@ -54,7 +66,9 @@ void enterStandbyModeMaster() {
     /* Clear Wakeup and Standby Flags */
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF3);
-    printf("Going to sleep\r\n");
+	#if UART_DEBUG
+    	printf("Going to sleep\r\n");
+	#endif
     // Enter Standby Mode
     HAL_PWR_EnterSTANDBYMode();
 }
@@ -80,7 +94,9 @@ void enterStandbyMode10s(void) {
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF3);
 
-    printf("No ACK received in 10 seconds, entering standby mode\r\n");
+	#if UART_DEBUG
+    	printf("No ACK received in 10 seconds, entering standby mode\r\n");
+	#endif
 
     // Enter Standby Mode
     HAL_PWR_EnterSTANDBYMode();

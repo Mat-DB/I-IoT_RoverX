@@ -7,6 +7,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include "main.h"
 
 #ifndef INC_BLE_H_

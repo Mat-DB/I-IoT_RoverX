@@ -11,6 +11,9 @@
 extern UART_HandleTypeDef huart2;
 extern I2C_HandleTypeDef hi2c1;
 
+extern uint16_t ch0_both;
+extern uint16_t ch1_IR;
+
 //LTR_329 setup
 void LTR_329_setup(){
 	HAL_StatusTypeDef ret;
@@ -90,8 +93,8 @@ void LTR_329_measure(){
 		#endif
 	}
 	else{
-		uint16_t ch0_both = data_rx[1] * 256 + data_rx[0]; // Visible + IR light
-		uint16_t ch1_IR = data_rx[3] * 256 + data_rx[2]; // IR light only
+		ch0_both = data_rx[1] * 256 + data_rx[0]; // Visible + IR light
+		ch1_IR = data_rx[3] * 256 + data_rx[2]; // IR light only
 
 		#if UART_DEBUG
 			for(int i = 0; i < 4 ; i++){

@@ -33,6 +33,13 @@ extern "C" {
 /* USER CODE BEGIN Includes */
 #define UART_DEBUG 1
 #define UART_DELAY 100
+// Set to 0 for master and 1 for slave!
+#define SLAVE 1
+#if SLAVE
+	#define BLE_I2C_ADDRESS 0x08 // Slave rover
+#else
+	#define BLE_I2C_ADDRESS 0x09 // Master rover
+#endif
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/

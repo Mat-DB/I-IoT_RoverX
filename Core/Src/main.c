@@ -26,8 +26,11 @@
 #include "uart_rover.h"
 #include "BLE.h"
 #include "stm_power.h"
+#include "ADXL345.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
+//#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -38,19 +41,22 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-// Set to 0 for master and 1 for slave!
-#define SLAVE 1
 #define SHT40_ADDRESS (0x44 << 1)
 
-#if SLAVE
-	#define BLE_I2C_ADDRESS 0x08 // Slave rover
-	uint32_t master_timer = 0;
-	uint32_t slave_timer = 0;
-	uint32_t wakeStartTime = 0;
-#else
-	#define BLE_I2C_ADDRESS 0x09 // Master rover
-#endif
+// Timer variables
+uint32_t master_timer = 0;
+uint32_t slave_timer = 0;
+uint32_t wakeStartTime = 0;
 
+// Data variables
+float temp_degC;
+float rh_pRH;
+uint16_t ch0_both;
+uint16_t ch1_IR;
+float z_g;
+
+#define format_data_length 50
+char formatted_data[format_data_length];
 
 /* USER CODE END PD */
 
@@ -77,22 +83,25 @@ UART_HandleTypeDef huart2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_I2C1_Init(void);
+void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_RTC_Init(void);
 /* USER CODE BEGIN PFP */
-static void global_init_Done(void);
-static void custom_init_Done(void);
+void global_init_Done(void);
+void custom_init_Done(void);
+void SHT40_measure(void);
 
-static void SHT40_measure(void);
-static void BLE_get(void);
+void format_data(uint8_t power_percentage, uint8_t sleep_mode, uint8_t data_flags, uint8_t rover_moved);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+int _write(int file, char *ptr, int len) {
+  HAL_UART_Transmit(&huart2, (uint8_t *)ptr, len, 2000);
+  return len;
+}
 /* USER CODE END 0 */
 
 /**
@@ -118,6 +127,10 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+
+  /*
+   *
+   */
 
   /* USER CODE END SysInit */
 
@@ -154,38 +167,66 @@ int main(void)
       #endif
   }
 
-  #if SLAVE
-  	  LTR_329_setup();
-  	  SHT40_measure();
-  	  LTR_329_measure();
+  custom_init_Done();
 
+  #if SLAVE
+  	  // Timer is to measure time awake -> Debug
 	  #if UART_DEBUG
+  	  	  HAL_TIM_Base_Start(&htim1);
+	  #endif
+  	  LTR_329_setup();
+  	  ADXL345_WakeUp();
+  	  ADXL345_Init();
+
+      uint32_t startTime = HAL_GetTick();
+      bool gotACK = false;
+
+      // Send data to BLE
+      SHT40_measure();
+      LTR_329_measure();
+      ADXL345_Measure();
+
+      #if UART_DEBUG
   	  	  uint32_t i2cStartTime = HAL_GetTick();
 	  #endif
-
-  	  // Make string packet to send!!
-
-  	  while(!send_data_to_BLE(data)) {
-  		  HAL_Delay(10);
+  	  format_data(0x0, 0x1, 0b00000111, 0x0);
+  	  while(!slave_send_data_to_BLE(formatted_data)) {
+  		  HAL_Delay(5); // Set to 5 instead of 10
   	  }
 	  #if UART_DEBUG
   	  	  uint32_t i2cEndTime = HAL_GetTick();
 	  #endif
-  	  HAL_TIM_Base_Start(&htim1);
-  	  HAL_Delay(1); // Wait for UART to flush
+
+      // Wait for ACK with timeout
+      while((HAL_GetTick() - startTime) < 10000) { // 10000ms = 10s
+          if(slave_receive_data_from_BLE()) {
+              gotACK = true;
+              uint32_t i2cDuration = i2cEndTime - i2cStartTime;
+			  #if UART_DEBUG
+              	  printf("Tussentijd (I2C transmit): %lu ms\r\n", i2cDuration);
+			  #endif
+              // Go to standby a little lower in the code
+          }
+          HAL_Delay(10);  // Small delay to prevent tight polling
+      }
+
+      // If no ACK received within 10s
+      if(!gotACK) {
+          enterStandbyMode10s();  // Enter 10s standby and signal BLE
+      }
+      else {
+    	  enterStandbyMode();  // Normal standby with calculated delay
+      }
 	#else
 	  int counter = 1;
-	  while(!receive_data_from_BLE_master()) {
+	  while(!master_receive_data_from_BLE()) {
 		  HAL_Delay(1);
 	  }
-	  while(!send_data_to_BLE_master()) {
+	  while(!master_send_data_to_BLE()) {
 		  HAL_Delay(1);
 	  }
-	  HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0);
 	  enterStandbyModeMaster();
 	#endif
-
-  custom_init_Done();
 
   /* USER CODE END 2 */
 
@@ -261,7 +302,7 @@ void SystemClock_Config(void)
   * @param None
   * @retval None
   */
-static void MX_I2C1_Init(void)
+void MX_I2C1_Init(void)
 {
 
   /* USER CODE BEGIN I2C1_Init 0 */
@@ -504,7 +545,7 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 // Global init done
-static void global_init_Done(){
+void global_init_Done(){
 	#if UART_DEBUG
 		const uint8_t length=24;
 		uint8_t message[length];
@@ -514,7 +555,7 @@ static void global_init_Done(){
 }
 
 // Custom init done
-static void custom_init_Done(){
+void custom_init_Done(){
 	#if UART_DEBUG
 		const uint8_t length=24;
 		uint8_t message[length];
@@ -524,7 +565,7 @@ static void custom_init_Done(){
 }
 
 // SHT40 is the themp and humidity sensor
-static void SHT40_measure(){
+void SHT40_measure(){
 	HAL_StatusTypeDef ret;
 	uint8_t data_tx[1] = {0xFD};
 	uint8_t data_rx[6];
@@ -554,17 +595,17 @@ static void SHT40_measure(){
 			float t_ticks = data_rx[0] * 256 + data_rx[1];
 			float rh_ticks = data_rx[3] * 256 + data_rx[4];
 
-			float t_degC = -45 + 175 * t_ticks/65535;
-			uint16_t temp_int = (uint16_t) (t_degC*10);
-			float rh_pRH = -6 + 125 * rh_ticks/65535;
-			uint16_t rh_int = (uint16_t) (rh_pRH*10);
+			temp_degC = -45 + 175 * t_ticks/65535;
+			//uint16_t temp_int = (uint16_t) (temp_degC*10);
+			rh_pRH = -6 + 125 * rh_ticks/65535;
+			//uint16_t rh_int = (uint16_t) (rh_pRH*10);
 
 			#if UART_DEBUG
 				for(int i = 0; i < 6 ; i++){
 					snprintf((char*) message, length, "data_rx[%i] = %u \r\n",i,data_rx[i]);
 					HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
 				}
-				snprintf((char*) message, length, "t_degC = %.2f \r\n",t_degC);
+				snprintf((char*) message, length, "t_degC = %.2f \r\n",temp_degC);
 				HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
 
 				snprintf((char*) message, length, "rh_pRH = %.2f \r\n",rh_pRH);
@@ -578,47 +619,57 @@ static void SHT40_measure(){
 	}
 }
 
-// BLE module
-static void BLE_get(){
-	HAL_StatusTypeDef ret;
-	uint8_t data_tx[1] = {0xFD};
-	uint8_t data_rx;
+void format_data(uint8_t power_percentage, uint8_t sleep_mode, uint8_t data_flags, uint8_t rover_moved){
+    uint8_t input = ((power_percentage & 0x07) << 5) | // Mask to 3 bits (bits 7-5)
+                    ((sleep_mode & 0x01) << 4) |      // Mask to 1 bit (bit 4)
+                    ((data_flags & 0x07) << 1) |     // Mask to 3 bits (bits 3-1)
+                    (rover_moved & 0x01);            // Mask to 1 bit (bit 0)
+    uint8_t message[32];  // Buffer for binary output message
+    int pos = 0;          // Position tracker for the message buffer
+
+    // Append the input byte directly to the message
+    message[pos++] = input;
+
+    // Append selected data based on flags in binary format, scaled by 100
+    if (data_flags & 0x04) {
+        short int temperature = (short int)((temp_degC) * 100);  // Placeholder temperature scaled by 100
+        short int humidity = (short int)(rh_pRH * 100); // Placeholder humidity scaled by 100
+        memcpy(&message[pos], &temperature, sizeof(temperature));
+        pos += sizeof(temperature);
+        memcpy(&message[pos], &humidity, sizeof(humidity));
+        pos += sizeof(humidity);
+    }
+
+    if (data_flags & 0x02) {
+        short int light_data = ch0_both;  // Placeholder light data
+        short int IR_data = ch1_IR;
+        memcpy(&message[pos], &light_data, sizeof(light_data));
+        pos += sizeof(light_data);
+        memcpy(&message[pos], &IR_data, sizeof(IR_data));
+        pos += sizeof(IR_data);
+    }
+
+    if (data_flags & 0x01) {
+        short int vibration = (short int)(z_g * 100);  // Placeholder vibration data scaled by 100
+        memcpy(&message[pos], &vibration, sizeof(vibration));
+        pos += sizeof(vibration);
+    }
+
+    snprintf(formatted_data, format_data_length, "");
+    for (int i = 0; i < pos; i++) {
+    	// Add a space after each byte except the last one
+    	if (i < pos - 1) {
+    		snprintf(formatted_data, format_data_length, "%s %2X ",formatted_data, message[i]);
+    	}
+    	else {
+    		snprintf(formatted_data, format_data_length, "%s %2X",formatted_data, message[i]);
+    	}
+    }
+
+    // Transmit the buffer
     #if UART_DEBUG
-		int length = 32;
-		uint8_t message[32]={'\0'};
-    #endif
-
-	ret = HAL_I2C_Master_Transmit(&hi2c1, BLE_ADDRESS, data_tx, 1, 1000);
-	HAL_Delay(10);
-	if ( ret != HAL_OK ) {
-		#if UART_DEBUG
-			snprintf((char*) message, length, "Error Tx BLE\r\n");
-			HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-	    #endif
-	}
-	else{
-		//read bytes
-		HAL_Delay(10);
-		ret =  HAL_I2C_Master_Receive(&hi2c1, BLE_ADDRESS, (uint8_t*)&data_rx, 1,1000);
-		if ( ret != HAL_OK ) {
-			#if UART_DEBUG
-				snprintf((char*) message, length, "Error Rx BLE\r\n");
-				HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-			#endif
-		}
-		else{
-			#if UART_DEBUG
-				snprintf((char*) message, length, "data_rx: 0x%X\r\n", data_rx);
-				HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-
-				//snprintf((char*) message, length, "rh_pRH = %.2f \r\n",rh_pRH);
-				//HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-			#endif
-		}
-	}
-	#if UART_DEBUG
-		snprintf((char*) message, length, "--------\r\n");
-		HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
+    	printf("FORMATTED by Matthias:\r\n");
+        HAL_UART_Transmit(&huart2, (uint8_t*) formatted_data, strlen(formatted_data), 100);
 	#endif
 }
 
