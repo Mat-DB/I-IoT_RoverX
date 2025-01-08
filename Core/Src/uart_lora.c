@@ -34,6 +34,14 @@ int LoRa_SendCommand(char *command, char *expected, uint32_t timeout) {
         	HAL_UART_Transmit(&huart2, (uint8_t*) temp, strlen(temp), 100);
 		#endif
         retVal=1;
+	} else {
+		#if UART_DEBUG
+			snprintf(temp, temp_length, "\r\nOutput:\r\n");
+			HAL_Delay(UART_DELAY);
+			HAL_UART_Transmit(&huart2, (uint8_t*) temp, strlen(temp), 100);
+			HAL_Delay(UART_DELAY);
+			HAL_UART_Transmit(&huart2, (uint8_t*) r_buf, strlen(r_buf), 100);
+		#endif
 	}
     return retVal;
 }
@@ -221,7 +229,12 @@ void LoRaWAN_Startup(void) {
 }
 
 
-void LoRaWAN_Send_msg(char *data, int set_1_for_hex){
+void LoRaWAN_Sleep(void){
+	LoRa_SendCommand_1000("AT+LOWPOWER\r\n", "+LOWPOWER: SLEEP");
+}
+
+
+void LoRaWAN_Send_msg(char *data, int hex_1){
 	#if UART_DEBUG
 		const uint8_t temp_length=120;
 		uint8_t temp[temp_length];
@@ -230,7 +243,7 @@ void LoRaWAN_Send_msg(char *data, int set_1_for_hex){
 	char command[length];
 	char expect_rx[length];
 
-	if (set_1_for_hex) {
+	if (hex_1) {
 		snprintf(command, length, "AT+MSGHEX=\"%02X\"\r\n", (unsigned int) data);
 		sniprintf(expect_rx, length, "+MSG: Done");
 		if (LoRa_SendCommand(command, expect_rx, 20000)) {

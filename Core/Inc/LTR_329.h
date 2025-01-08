@@ -5,6 +5,10 @@
  *      Author: matthias
  */
 
+#include <string.h>
+#include <stdio.h>
+#include "main.h"
+
 #ifndef SRC_LTR_329_H_
 #define SRC_LTR_329_H_
 
@@ -48,6 +52,10 @@ typedef enum {
   LTR3XX_MEASRATE_1000,
   LTR3XX_MEASRATE_2000,
 } ltr329_measurerate_t;
+
+
+void LTR_329_setup(void);
+void LTR_329_measure(void);
 
 
 #endif /* SRC_LTR_329_H_ */

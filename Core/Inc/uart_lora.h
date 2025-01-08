@@ -17,6 +17,7 @@
 int LoRa_SendCommand_1000(char *command, char *expected);
 int LoRa_SendCommand(char *command, char *expected, uint32_t timeout);
 void LoRaWAN_Startup(void);
-void LoRaWAN_Send_msg(char *data, int set_1_for_hex);
+void LoRaWAN_Sleep(void);
+void LoRaWAN_Send_msg(char *data, int hex_1);
 
 #endif /* SRC_UART_LORA_H_ */

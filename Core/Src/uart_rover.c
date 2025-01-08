@@ -47,3 +47,15 @@ int Rover_SendCommand(char *command, char *expected, uint32_t timeout) {
     return retVal;
 }
 
+void drive_rover(){
+	uint8_t command[16];  // Join command for LoRaWAN E5
+	snprintf((char*) command, 16, "drvstr 200 70\n");
+	HAL_UART_Transmit(&huart1, command, strlen((char*) command), 100);
+
+
+	//uint8_t message[16];
+	uint8_t temp[32];
+	//HAL_UART_Receive(&huart1, message, 7, 10);
+	snprintf((char*) temp, 32, "Driving started\r\n");
+	HAL_UART_Transmit(&huart2, temp, strlen((char*) temp), 10);
+}

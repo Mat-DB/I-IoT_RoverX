@@ -16,5 +16,6 @@
 int Rover_SendCommand_1000(char *command, char *expected);
 int Rover_SendCommand(char *command, char *expected, uint32_t timeout);
 
+void drive_rover(void);
 
 #endif /* INC_UART_ROVER_H_ */

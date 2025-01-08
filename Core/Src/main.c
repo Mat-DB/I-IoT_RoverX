@@ -24,6 +24,8 @@
 #include "LTR_329.h"
 #include "uart_lora.h"
 #include "uart_rover.h"
+#include "BLE.h"
+#include "stm_power.h"
 #include <string.h>
 #include <stdio.h>
 /* USER CODE END Includes */
@@ -35,8 +37,20 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+// Set to 0 for master and 1 for slave!
+#define SLAVE 1
 #define SHT40_ADDRESS (0x44 << 1)
-#define BLE_ADDRESS (0x55 << 1)
+
+#if SLAVE
+	#define BLE_I2C_ADDRESS 0x08 // Slave rover
+	uint32_t master_timer = 0;
+	uint32_t slave_timer = 0;
+	uint32_t wakeStartTime = 0;
+#else
+	#define BLE_I2C_ADDRESS 0x09 // Master rover
+#endif
+
 
 /* USER CODE END PD */
 
@@ -47,6 +61,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+
+RTC_HandleTypeDef hrtc;
+
+TIM_HandleTypeDef htim1;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
@@ -61,16 +79,15 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_TIM1_Init(void);
+static void MX_RTC_Init(void);
 /* USER CODE BEGIN PFP */
 static void global_init_Done(void);
 static void custom_init_Done(void);
 
 static void SHT40_measure(void);
-static void LTR_329_setup(void);
-static void LTR_329_measure(void);
 static void BLE_get(void);
 
-static void drive_rover(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -109,40 +126,78 @@ int main(void)
   MX_USART2_UART_Init();
   MX_I2C1_Init();
   MX_USART1_UART_Init();
+  MX_TIM1_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
+  // Wake BLE by pulling PB4 low then high
+  HAL_GPIO_WritePin(BLE_wake_up_GPIO_Port, BLE_wake_up_Pin, GPIO_PIN_SET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(BLE_wake_up_GPIO_Port, BLE_wake_up_Pin, GPIO_PIN_RESET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(BLE_wake_up_GPIO_Port, BLE_wake_up_Pin, GPIO_PIN_SET);
+  HAL_Delay(1);
 
-  global_init_Done();
-   //LTR_329_setup();
-  //LoRaWAN_Startup();
+  // Check if we woke up from Standby
+  if (__HAL_PWR_GET_FLAG(PWR_FLAG_SB) != RESET) {
+      // Clear Standby and Wakeup Flags
+      __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
+      __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF3);
+      HAL_I2C_DeInit(&hi2c1);
+      HAL_Delay(10);
+      MX_I2C1_Init();
+      #if UART_DEBUG
+          printf("Woken up from Standby mode!\r\n");
+      #endif
+  } else {
+      #if UART_DEBUG
+        printf("Normal startup\r\n");
+      #endif
+  }
+
+  #if SLAVE
+  	  LTR_329_setup();
+  	  SHT40_measure();
+  	  LTR_329_measure();
+
+	  #if UART_DEBUG
+  	  	  uint32_t i2cStartTime = HAL_GetTick();
+	  #endif
+
+  	  // Make string packet to send!!
+
+  	  while(!send_data_to_BLE(data)) {
+  		  HAL_Delay(10);
+  	  }
+	  #if UART_DEBUG
+  	  	  uint32_t i2cEndTime = HAL_GetTick();
+	  #endif
+  	  HAL_TIM_Base_Start(&htim1);
+  	  HAL_Delay(1); // Wait for UART to flush
+	#else
+	  int counter = 1;
+	  while(!receive_data_from_BLE_master()) {
+		  HAL_Delay(1);
+	  }
+	  while(!send_data_to_BLE_master()) {
+		  HAL_Delay(1);
+	  }
+	  HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0);
+	  enterStandbyModeMaster();
+	#endif
+
   custom_init_Done();
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  //LoRaWAN_Send_msg("Hello Stijn VR!");
-  const int delay_rover=2000;
-  //Rover_SendCommand("help\n", "stupid", 30000);
-  //HAL_Delay(delay_rover);
-  Rover_SendCommand("getgyr\n", "stupid", 5000);
-  HAL_Delay(delay_rover);
-  Rover_SendCommand("drvstr 200 80\n", "stupid", 5000);
-  HAL_Delay(delay_rover);
-  HAL_UART_Transmit(&huart2, (uint8_t*) "\r\nEND\r\n", strlen("\r\nEND\r\n"), 100);
-  int delay = 4000;
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-	//SHT40_measure();
-	//LTR_329_measure();
-	//BLE_get();
-	//drive_rover();
-	HAL_Delay(delay);
-	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-	HAL_Delay(delay);
+
   }
   /* USER CODE END 3 */
 }
@@ -250,6 +305,97 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(void)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  hrtc.Init.OutPutPullUp = RTC_OUTPUT_PULLUP_NONE;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Enable the WakeUp
+  */
+  if (HAL_RTCEx_SetWakeUpTimer(&hrtc, 30720, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
+
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 15624;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 65535;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+
+}
+
+/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -265,7 +411,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 19200;
+  huart1.Init.BaudRate = 9600;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -336,7 +482,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, LD3_Pin|BLE_wake_up_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PA5_unused_Pin P6A_unused_Pin */
   GPIO_InitStruct.Pin = PA5_unused_Pin|P6A_unused_Pin;
@@ -344,12 +490,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LD3_Pin */
-  GPIO_InitStruct.Pin = LD3_Pin;
+  /*Configure GPIO pins : LD3_Pin BLE_wake_up_Pin */
+  GPIO_InitStruct.Pin = LD3_Pin|BLE_wake_up_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LD3_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -360,7 +506,7 @@ static void MX_GPIO_Init(void)
 // Global init done
 static void global_init_Done(){
 	#if UART_DEBUG
-	const uint8_t length=24;
+		const uint8_t length=24;
 		uint8_t message[length];
 		snprintf((char*) message, length, "Global init done!\r\n");
 		HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
@@ -409,7 +555,9 @@ static void SHT40_measure(){
 			float rh_ticks = data_rx[3] * 256 + data_rx[4];
 
 			float t_degC = -45 + 175 * t_ticks/65535;
+			uint16_t temp_int = (uint16_t) (t_degC*10);
 			float rh_pRH = -6 + 125 * rh_ticks/65535;
+			uint16_t rh_int = (uint16_t) (rh_pRH*10);
 
 			#if UART_DEBUG
 				for(int i = 0; i < 6 ; i++){
@@ -428,98 +576,6 @@ static void SHT40_measure(){
 			HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
 		#endif
 	}
-}
-
-//LTR_329 setup
-static void LTR_329_setup(){
-	HAL_StatusTypeDef ret;
-	ltr329_gain_t gain = LTR3XX_GAIN_2;
-	ltr329_integrationtime_t intTime = LTR3XX_INTEGTIME_100;
-	ltr329_measurerate_t measureRate = LTR3XX_MEASRATE_200;
-
-	#if UART_DEBUG
-		int length = 48;
-		uint8_t message[48]={'\0'};
-	#endif
-
-	// 1. Create ALS_CONTR Register value.
-	// 000<gain(3)><Reset(1)><Mode(1)>
-	uint8_t contr_value = (0b000 << 5) | (gain << 2) | (0 << 1) | (1);
-
-	#if UART_DEBUG
-		snprintf((char*) message, length, "contr_value: 0x%X, gain%d\r\n", contr_value, gain);
-		HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-	#endif
-
-	// 2. Set the ALS_CONTR Register
-	ret = HAL_I2C_Mem_Write(&hi2c1, LTR329_I2CADDR, LTR329_ALS_CTRL, 1, &contr_value, 1, 1000);
-
-	if ( ret != HAL_OK ) {
-		#if UART_DEBUG
-		  snprintf((char*) message, length, "Error Tx - set ALS_CONTR reg\r\n");
-		  HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-		#endif
-	}
-	// 3. Create ALS_MEAS_RATE register value
-	// 00<integration time(3)><measurement rate(3)>
-	uint8_t contr2_value = (0b00 << 6) | (intTime << 3) | (measureRate);
-	if (UART_DEBUG) {
-		snprintf((char*) message, length, "contr2_value: 0x%X\r\n", contr2_value);
-		HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-	}
-
-	// 4. Set ALS_MEAS_RATE Register
-	ret = HAL_I2C_Mem_Write(&hi2c1, LTR329_I2CADDR, LTR329_MEAS_RATE, 1, &contr2_value, 1, 1000);
-	HAL_Delay(10);
-	if ( ret != HAL_OK ) {
-		#if UART_DEBUG
-			snprintf((char*) message, length, "Error Tx - set ALS_MEAS_RATE reg\r\n");
-			HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-		#endif
-	}
-	else {
-		#if UART_DEBUG
-			snprintf((char*) message, length, "Succes setting up LTR_329!\r\n");
-			HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-		#endif
-	}
-	#if UART_DEBUG
-		snprintf((char*) message, length, "--------\r\n");
-		HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-	#endif
-}
-
-// LTR_329 is the light sensor
-static void LTR_329_measure(){
-	HAL_StatusTypeDef ret;
-	uint8_t data_rx[4];
-
-	#if UART_DEBUG
-		int length = 48;
-		uint8_t message[48]={'\0'};
-	#endif
-
-	// 5. Get data, 4 register values, 2 times 16 bits
-	ret = HAL_I2C_Mem_Read(&hi2c1, LTR329_I2CADDR, LTR329_CH1DATA, 1, (uint8_t*)&data_rx, 4, 1000);
-	HAL_Delay(5);
-	if ( ret != HAL_OK ) {
-		#if UART_DEBUG
-			snprintf((char*) message, length, "Error Rx data LTR-329\r\n");
-			HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-		#endif
-	}
-	else{
-		#if UART_DEBUG
-			for(int i = 0; i < 4 ; i++){
-				snprintf((char*) message, length, "data_rx[%i] = %u \r\n",i,data_rx[i]);
-			 HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-		 }
-		#endif
-	}
-	#if UART_DEBUG
-		snprintf((char*) message, length, "--------\r\n");
-		HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
-	#endif
 }
 
 // BLE module
@@ -565,20 +621,6 @@ static void BLE_get(){
 		HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
 	#endif
 }
-
-static void drive_rover(){
-	uint8_t command[16];  // Join command for LoRaWAN E5
-	snprintf((char*) command, 16, "drvstr 200 70\n");
-	HAL_UART_Transmit(&huart1, command, strlen((char*) command), 100);
-
-
-	//uint8_t message[16];
-	uint8_t temp[32];
-	//HAL_UART_Receive(&huart1, message, 7, 10);
-	snprintf((char*) temp, 32, "Driving started\r\n");
-	HAL_UART_Transmit(&huart2, temp, strlen((char*) temp), 10);
-}
-
 
 /* USER CODE END 4 */
 
