@@ -89,8 +89,12 @@ bool master_receive_data_from_BLE(void) {
 			#if UART_DEBUG
         		printf("Received valid sensor data from BLE: %s\r\n", received_data);
 			#endif
-            send_data_to_BLE_master();  // Only send ACK for valid data
+            master_send_data_to_BLE();  // Only send ACK for valid data
             return true;
+        } else {
+			#if UART_DEBUG
+        		printf("Received invalid sensor data from BLE\r\n");
+			#endif
         }
         return false;
     }

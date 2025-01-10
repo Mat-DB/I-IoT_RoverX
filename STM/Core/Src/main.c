@@ -189,7 +189,9 @@ int main(void)
       #if UART_DEBUG
   	  	  uint32_t i2cStartTime = HAL_GetTick();
 	  #endif
-  	  format_data(0x0, 0x1, 0b00000111, 0x0);
+  	  // 3 bits bat % - 1 bit to sleep - 3 bits select data - 1 bit moved
+  	  // Select data: 1 bit temp&humidity - 1 bit light - 1 bit vibrations
+  	  format_data(0x0, 0x1, 0b00001110, 0x0);
   	  while(!slave_send_data_to_BLE(formatted_data)) {
   		  HAL_Delay(5); // Set to 5 instead of 10
   	  }
@@ -220,7 +222,8 @@ int main(void)
 	#else
 	  int counter = 1;
 	  while(!master_receive_data_from_BLE()) {
-		  HAL_Delay(1);
+		  HAL_Delay(10);
+		  printf("Waiting...\r\n");
 	  }
 	  while(!master_send_data_to_BLE()) {
 		  HAL_Delay(1);
@@ -658,17 +661,18 @@ void format_data(uint8_t power_percentage, uint8_t sleep_mode, uint8_t data_flag
     snprintf(formatted_data, format_data_length, "");
     for (int i = 0; i < pos; i++) {
     	// Add a space after each byte except the last one
-    	if (i < pos - 1) {
-    		snprintf(formatted_data, format_data_length, "%s %2X ",formatted_data, message[i]);
-    	}
-    	else {
-    		snprintf(formatted_data, format_data_length, "%s %2X",formatted_data, message[i]);
-    	}
+//    	if (i < pos - 1) {
+//    		snprintf(formatted_data, format_data_length, "%s %2X ",formatted_data, message[i]);
+//    	}
+//    	else {
+//    		snprintf(formatted_data, format_data_length, "%s %2X",formatted_data, message[i]);
+//    	}
+    	snprintf(formatted_data, format_data_length, "%s%2X",formatted_data, message[i]);
     }
 
     // Transmit the buffer
     #if UART_DEBUG
-    	printf("FORMATTED by Matthias:\r\n");
+    	printf("FORMATTED Data:\r\n");
         HAL_UART_Transmit(&huart2, (uint8_t*) formatted_data, strlen(formatted_data), 100);
 	#endif
 }

@@ -1,0 +1,5 @@
+../Core/Src/uart_lora.c:19:5:LoRa_SendCommand	240	static
+../Core/Src/uart_lora.c:14:5:LoRa_SendCommand_1000	0	static
+../Core/Src/uart_lora.c:50:6:LoRaWAN_Startup	256	static
+../Core/Src/uart_lora.c:232:6:LoRaWAN_Sleep	0	static
+../Core/Src/uart_lora.c:237:6:LoRaWAN_Send_msg	256	static

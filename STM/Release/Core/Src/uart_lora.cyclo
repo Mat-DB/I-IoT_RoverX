@@ -1,0 +1,5 @@
+../Core/Src/uart_lora.c:19:5:LoRa_SendCommand	2
+../Core/Src/uart_lora.c:14:5:LoRa_SendCommand_1000	1
+../Core/Src/uart_lora.c:50:6:LoRaWAN_Startup	9
+../Core/Src/uart_lora.c:232:6:LoRaWAN_Sleep	1
+../Core/Src/uart_lora.c:237:6:LoRaWAN_Send_msg	4

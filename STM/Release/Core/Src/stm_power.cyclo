@@ -1,0 +1,3 @@
+../Core/Src/stm_power.c:18:6:enterStandbyMode	3
+../Core/Src/stm_power.c:56:6:enterStandbyModeMaster	2
+../Core/Src/stm_power.c:76:6:enterStandbyMode10s	2

@@ -1,0 +1,4 @@
+../Core/Src/ADXL345.c:15:6:ADXL345_Init	1
+../Core/Src/ADXL345.c:31:6:ADXL345_WakeUp	3
+../Core/Src/ADXL345.c:61:6:ADXL345_Measure	5
+../Core/Src/ADXL345.c:106:6:ADXL345_Sleep	2
