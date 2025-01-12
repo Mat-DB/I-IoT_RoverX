@@ -1,4 +1,4 @@
-../Core/Src/BLE.c:17:6:slave_send_data_to_BLE	2
-../Core/Src/BLE.c:41:6:slave_receive_data_from_BLE	4
-../Core/Src/BLE.c:105:6:master_send_data_to_BLE	2
-../Core/Src/BLE.c:78:6:master_receive_data_from_BLE	4
+../Core/Src/BLE.c:20:6:slave_send_data_to_BLE	2
+../Core/Src/BLE.c:44:6:mastertest_receive_data_from_BLE	3
+../Core/Src/BLE.c:92:6:master_receive_data_from_BLE	4
+../Core/Src/BLE.c:139:6:master_send_data_to_BLE	2

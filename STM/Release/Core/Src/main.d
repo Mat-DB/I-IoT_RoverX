@@ -31,9 +31,9 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_tim_ex.h \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_uart.h \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_uart_ex.h \
- ../Core/Inc/LTR_329.h ../Core/Inc/main.h ../Core/Inc/uart_lora.h \
- ../Core/Inc/uart_rover.h ../Core/Inc/BLE.h ../Core/Inc/stm_power.h \
- ../Core/Inc/ADXL345.h
+ ../Core/Inc/LTR_329.h ../Core/Inc/main.h ../Core/Inc/BLE.h \
+ ../Core/Inc/stm_power.h ../Core/Inc/stm_power.h ../Core/Inc/ADXL345.h \
+ ../Core/Inc/LoRaWAN.h ../Core/Inc/rover.h
 ../Core/Inc/main.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h:
 ../Core/Inc/stm32l4xx_hal_conf.h:
@@ -69,8 +69,9 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_uart_ex.h:
 ../Core/Inc/LTR_329.h:
 ../Core/Inc/main.h:
-../Core/Inc/uart_lora.h:
-../Core/Inc/uart_rover.h:
 ../Core/Inc/BLE.h:
 ../Core/Inc/stm_power.h:
+../Core/Inc/stm_power.h:
 ../Core/Inc/ADXL345.h:
+../Core/Inc/LoRaWAN.h:
+../Core/Inc/rover.h:

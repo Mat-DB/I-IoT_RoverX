@@ -48,8 +48,10 @@ void LTR_329_setup(){
 	// 00<integration time(3)><measurement rate(3)>
 	uint8_t contr2_value = (0b00 << 6) | (intTime << 3) | (measureRate);
 	if (UART_DEBUG) {
-		snprintf((char*) message, length, "contr2_value: 0x%X\r\n", contr2_value);
-		HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
+	#if UART_DEBUG
+			snprintf((char*) message, length, "contr2_value: 0x%X\r\n", contr2_value);
+			HAL_UART_Transmit(&huart2, message, strlen((char*) message), 100);
+		#endif
 	}
 
 	// 4. Set ALS_MEAS_RATE Register

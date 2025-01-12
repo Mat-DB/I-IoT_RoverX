@@ -14,6 +14,8 @@
 
 void enterStandbyMode(void);
 void enterStandbyModeMaster();
-void enterStandbyMode10s(void);
+void enterStandbyModeShort(void);
+
+void reset_i2c(void);
 
 #endif /* INC_STM_POWER_H_ */

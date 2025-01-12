@@ -60,8 +60,8 @@ all: main-build
 main-build: RoverX_testing.elf secondary-outputs
 
 # Tool invocations
-RoverX_testing.elf RoverX_testing.map: $(OBJS) $(USER_OBJS) /home/matthias/STM32CubeIDE/workspace_1.14.0/RoverX_testing/STM32L412KBUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "RoverX_testing.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/home/matthias/STM32CubeIDE/workspace_1.14.0/RoverX_testing/STM32L412KBUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="RoverX_testing.map" -Wl,--gc-sections -static -u_printf_float --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+RoverX_testing.elf RoverX_testing.map: $(OBJS) $(USER_OBJS) /home/matthias/STM32CubeIDE/workspace_1.14.0/RoverX_testing/STM/STM32L412KBUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "RoverX_testing.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/home/matthias/STM32CubeIDE/workspace_1.14.0/RoverX_testing/STM/STM32L412KBUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="RoverX_testing.map" -Wl,--gc-sections -static -u_printf_float --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

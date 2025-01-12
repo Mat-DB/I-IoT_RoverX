@@ -1,6 +1,6 @@
-/Release/
+*/Release/
 .cproject
 .mxproject
 .project
-.settings/
+.settings
 

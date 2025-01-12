@@ -6,6 +6,7 @@
  */
 
 #include "BLE.h"
+//#include <ctype.h>
 
 extern UART_HandleTypeDef huart2;
 extern I2C_HandleTypeDef hi2c1;
@@ -13,6 +14,8 @@ extern I2C_HandleTypeDef hi2c1;
 extern uint32_t master_timer;
 extern uint32_t slave_timer;
 extern uint32_t wakeStartTime;
+
+extern char received_data_BLE[lora_data_length];
 
 bool slave_send_data_to_BLE(const char* data_string) {
     HAL_StatusTypeDef status;
@@ -30,74 +33,105 @@ bool slave_send_data_to_BLE(const char* data_string) {
         #if UART_DEBUG
         	printf("Error in transmission: 0x%02X\r\n", status);
         #endif
-        // Attempt I2C Recovery
-        HAL_I2C_DeInit(&hi2c1);
-        HAL_Delay(1);
-        MX_I2C1_Init();
+//        // Attempt I2C Recovery
+//        HAL_I2C_DeInit(&hi2c1);
+//        HAL_Delay(1);
+//        MX_I2C1_Init();
         return false;
     }
 }
 
-bool slave_receive_data_from_BLE(void) {
+bool mastertest_receive_data_from_BLE(void) {
     HAL_StatusTypeDef status;
-    uint8_t buffer[64]; // Increased buffer size for timer values
+    uint8_t buffer[64];
 
-    status = HAL_I2C_Master_Receive(&hi2c1, BLE_I2C_ADDRESS << 1, buffer, sizeof(buffer)-1, 100);
+    // First, make sure I2C bus is clear
+    reset_i2c();
+    HAL_Delay(10);  // Give BLE time to setup after wake
 
-    if (status == HAL_OK) {
-        buffer[sizeof(buffer)-1] = '\0';
-		#if UART_DEBUG
-        	printf("Received from BLE: %s\r\n", buffer);
-		#endif
+    // Try to receive data
+    for(int retry = 0; retry < 3; retry++) {  // Add retries
+        status = HAL_I2C_Master_Receive(&hi2c1, BLE_I2C_ADDRESS << 1, buffer, sizeof(buffer)-1, 100);
 
-        // Parse ACK and timer values
-        if (strncmp((char*)buffer, "ACK_", 4) == 0) {
-            uint32_t m_timer, s_timer;
-            if (sscanf((char*)buffer, "ACK_%lu_%lu", &m_timer, &s_timer) == 2) {
-                master_timer = m_timer;
-                slave_timer = s_timer;
-				#if UART_DEBUG
-                	printf("Parsed timers - Master: %lu, Slave: %lu\r\n", master_timer, slave_timer);
-				#endif
-                return true;
-            }
+        if (status == HAL_OK) {
+            buffer[sizeof(buffer)-1] = '\0';
+            printf("Received I2C data: %s\r\n", buffer);
+            return true;
         }
-    } else {
-		#if UART_DEBUG
-    	        printf("Error receiving from BLE: %d\r\n", status);
-		#endif
-        HAL_I2C_DeInit(&hi2c1);
-        HAL_Delay(1);
-        MX_I2C1_Init();
+        HAL_Delay(10);  // Wait before retry
     }
 
     return false;
 }
 
 
+//bool slave_receive_data_from_BLE(void) {
+//   HAL_StatusTypeDef status;
+//   uint8_t received_data[64] = {0};
+//
+//   status = HAL_I2C_Master_Receive(&hi2c1, BLE_I2C_ADDRESS << 1, received_data, sizeof(received_data) - 1, 2000);
+//   if (status == HAL_OK) {
+//       received_data[sizeof(received_data) - 1] = '\0';
+//
+//       if (isspace(received_data[0])) { // Check if first character is a space
+//           #if UART_DEBUG
+//           printf("Received valid data from BLE: %s\r\n", received_data);
+//           #endif
+//           master_send_data_to_BLE();
+//           return true;
+//       }
+//       #if UART_DEBUG
+//       printf("Invalid data format (no leading space)\r\n");
+//       #endif
+//       return false;
+//   }
+//   return false;
+//}
+
+
 bool master_receive_data_from_BLE(void) {
     HAL_StatusTypeDef status;
-    uint8_t received_data[64] = {0};
+    uint8_t buffer[64];
 
-    status = HAL_I2C_Master_Receive(&hi2c1, BLE_I2C_ADDRESS << 1, received_data, sizeof(received_data) - 1, 500);
+    // First, make sure I2C bus is clear
+    reset_i2c();
+    HAL_Delay(10); // Give BLE time to setup after wake
 
-    if (status == HAL_OK) {
-        received_data[sizeof(received_data) - 1] = '\0';
+    // Try to receive data with retries
+    for(int retry = 0; retry < 3; retry++) {
+        status = HAL_I2C_Master_Receive(&hi2c1, BLE_I2C_ADDRESS << 1, buffer, sizeof(buffer)-1, 100);
 
-        // Validate that we received actual sensor data (check for "T=" and "H=")
-        if (strstr((char*)received_data, "T=") && strstr((char*)received_data, "H=")) {
-			#if UART_DEBUG
-        		printf("Received valid sensor data from BLE: %s\r\n", received_data);
-			#endif
-            master_send_data_to_BLE();  // Only send ACK for valid data
-            return true;
-        } else {
-			#if UART_DEBUG
-        		printf("Received invalid sensor data from BLE\r\n");
-			#endif
+        if (status == HAL_OK) {
+            buffer[sizeof(buffer)-1] = '\0';
+            #if UART_DEBUG
+            printf("Received from BLE: %s\r\n", buffer);
+            #endif
+
+            char dataOnly[lora_data_length];
+            uint32_t time1, time2;
+            // Parse data with format "data_timer1timer2"
+            if (sscanf((char*)buffer, "%[^_]_%lu_%lu", dataOnly, &time1, &time2) == 3) {
+            	master_timer = time1;
+                slave_timer = time2;
+                #if UART_DEBUG
+                printf("Data: %s\nTime1: %lu ms, Time2: %lu ms\n",
+                       dataOnly, master_timer, slave_timer);
+                #endif
+                snprintf(received_data_BLE, lora_data_length, "%s", dataOnly);
+                return true;
+            } else {
+                #if UART_DEBUG
+                	printf("Failed to parse data format\r\n");
+                	printf("TEST: data: %s\r\n", dataOnly);
+                #endif
+            }
         }
-        return false;
+        #if UART_DEBUG
+        printf("Error receiving from BLE (attempt %d): %d\r\n", retry + 1, status);
+        #endif
+        HAL_Delay(10); // Wait before retry
     }
+
     return false;
 }
 
@@ -120,15 +154,8 @@ bool master_send_data_to_BLE() {
         #if UART_DEBUG
             printf("Error in transmission while sending ACK\r\n");
         #endif
-        // Attempt I2C Recovery
-        HAL_I2C_DeInit(&hi2c1);
-        HAL_Delay(1);
-        MX_I2C1_Init();
         return 0;
     }
 }
-
-
-
 
 

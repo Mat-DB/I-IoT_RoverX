@@ -22,15 +22,15 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "LTR_329.h"
-#include "uart_lora.h"
-#include "uart_rover.h"
 #include "BLE.h"
 #include "stm_power.h"
 #include "ADXL345.h"
+#include "LoRaWAN.h"
+#include "rover.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
-//#include <stdlib.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,6 +47,7 @@
 uint32_t master_timer = 0;
 uint32_t slave_timer = 0;
 uint32_t wakeStartTime = 0;
+uint32_t start_LoRa = 0;
 
 // Data variables
 float temp_degC;
@@ -55,8 +56,10 @@ uint16_t ch0_both;
 uint16_t ch1_IR;
 float z_g;
 
-#define format_data_length 50
-char formatted_data[format_data_length];
+// In main.h!!!
+//#define format_data_length 23
+char formatted_data[lora_data_length];
+char received_data_BLE[lora_data_length];
 
 /* USER CODE END PD */
 
@@ -83,7 +86,7 @@ UART_HandleTypeDef huart2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
-void MX_I2C1_Init(void);
+static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_RTC_Init(void);
@@ -94,6 +97,10 @@ void SHT40_measure(void);
 
 void format_data(uint8_t power_percentage, uint8_t sleep_mode, uint8_t data_flags, uint8_t rover_moved);
 
+void setup_driving_pins(void);
+
+// THIS IS IN main.h!!!
+//void reset_i2c(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -142,13 +149,15 @@ int main(void)
   MX_TIM1_Init();
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
+  global_init_Done();
   // Wake BLE by pulling PB4 low then high
   HAL_GPIO_WritePin(BLE_wake_up_GPIO_Port, BLE_wake_up_Pin, GPIO_PIN_SET);
-  HAL_Delay(1);
+  HAL_Delay(10);
   HAL_GPIO_WritePin(BLE_wake_up_GPIO_Port, BLE_wake_up_Pin, GPIO_PIN_RESET);
-  HAL_Delay(1);
+  HAL_Delay(10);
   HAL_GPIO_WritePin(BLE_wake_up_GPIO_Port, BLE_wake_up_Pin, GPIO_PIN_SET);
-  HAL_Delay(1);
+  HAL_Delay(10);
+  reset_i2c();
 
   // Check if we woke up from Standby
   if (__HAL_PWR_GET_FLAG(PWR_FLAG_SB) != RESET) {
@@ -169,65 +178,88 @@ int main(void)
 
   custom_init_Done();
 
+  HAL_TIM_Base_Start(&htim1);
+  wakeStartTime = HAL_GetTick();
+
   #if SLAVE
-  	  // Timer is to measure time awake -> Debug
-	  #if UART_DEBUG
-  	  	  HAL_TIM_Base_Start(&htim1);
-	  #endif
+	  // Timer is to measure time awake -> Debug
+ 	  #if UART_DEBUG
+	  	  HAL_TIM_Base_Start(&htim1);
+	  	  uint32_t wakeStartTime = HAL_GetTick();
+  	  #endif
   	  LTR_329_setup();
   	  ADXL345_WakeUp();
   	  ADXL345_Init();
 
-      uint32_t startTime = HAL_GetTick();
-      bool gotACK = false;
+  	  drive_rover();
 
       // Send data to BLE
       SHT40_measure();
       LTR_329_measure();
       ADXL345_Measure();
 
-      #if UART_DEBUG
-  	  	  uint32_t i2cStartTime = HAL_GetTick();
-	  #endif
   	  // 3 bits bat % - 1 bit to sleep - 3 bits select data - 1 bit moved
   	  // Select data: 1 bit temp&humidity - 1 bit light - 1 bit vibrations
-  	  format_data(0x0, 0x1, 0b00001110, 0x0);
+  	  format_data(0x0, 0x1, 0b111, 0x0);
   	  while(!slave_send_data_to_BLE(formatted_data)) {
   		  HAL_Delay(5); // Set to 5 instead of 10
   	  }
-	  #if UART_DEBUG
-  	  	  uint32_t i2cEndTime = HAL_GetTick();
-	  #endif
 
-      // Wait for ACK with timeout
-      while((HAL_GetTick() - startTime) < 10000) { // 10000ms = 10s
-          if(slave_receive_data_from_BLE()) {
-              gotACK = true;
-              uint32_t i2cDuration = i2cEndTime - i2cStartTime;
-			  #if UART_DEBUG
-              	  printf("Tussentijd (I2C transmit): %lu ms\r\n", i2cDuration);
-			  #endif
-              // Go to standby a little lower in the code
-          }
-          HAL_Delay(10);  // Small delay to prevent tight polling
-      }
+  	  HAL_Delay(10);
+  	  enterStandbyMode();
 
-      // If no ACK received within 10s
-      if(!gotACK) {
-          enterStandbyMode10s();  // Enter 10s standby and signal BLE
-      }
-      else {
-    	  enterStandbyMode();  // Normal standby with calculated delay
-      }
-	#else
-	  int counter = 1;
+//      // Wait for ACK with timeout
+//      while((HAL_GetTick() - startTime) < 10000) { // 10000ms = 10s
+//          if(slave_receive_data_from_BLE()) {
+//              gotACK = true;
+//              uint32_t i2cDuration = i2cEndTime - i2cStartTime;
+//			  #if UART_DEBUG
+//              	  printf("Tussentijd (I2C transmit): %lu ms\r\n", i2cDuration);
+//			  #endif
+//              // Go to standby a little lower in the code
+//          }
+//          HAL_Delay(10);  // Small delay to prevent tight polling
+//      }
+//
+//      // If no ACK received within 10s
+//      if(!gotACK) {
+//          enterStandbyMode10s();  // Enter 10s standby and signal BLE
+//      }
+//      else {
+//    	  enterStandbyMode();  // Normal standby with calculated delay
+//      }
+	#else // master
+  	  setup_driving_pins();
+  	  //reset_i2c();
+
 	  while(!master_receive_data_from_BLE()) {
-		  HAL_Delay(10);
-		  printf("Waiting...\r\n");
+		  uint32_t currentTime = HAL_GetTick();
+		  if(currentTime < 10000) {
+			  HAL_Delay(5);
+		  }
+		  else {
+		  reset_i2c();
+	      enterStandbyModeShort();
+		  }
 	  }
-	  while(!master_send_data_to_BLE()) {
-		  HAL_Delay(1);
-	  }
+	  start_LoRa = HAL_GetTick();
+	  #if UART_DEBUG
+  	  	  printf("test\r\n");
+	  #endif
+  	  //snprintf(received_data_BLE, lora_data_length, "8E07D003E8012C00FA00C8");
+	  // Data received -> send to LoRa
+  	  LoRaWAN_WakeUp();
+  	  HAL_Delay(10);
+	  LoRaWAN_Startup(1); // 1 or 0 to enable or disable sending EUI's etc
+	  HAL_Delay(100);
+	  LoRaWAN_Send_msg(received_data_BLE, 1);
+	  HAL_Delay(10);
+	  LoRaWAN_Sleep();
+	  HAL_Delay(10);
+
+	  drive_sequence_master();
+	  setup_driving_pins();
+
 	  enterStandbyModeMaster();
 	#endif
 
@@ -305,7 +337,7 @@ void SystemClock_Config(void)
   * @param None
   * @retval None
   */
-void MX_I2C1_Init(void)
+static void MX_I2C1_Init(void)
 {
 
   /* USER CODE BEGIN I2C1_Init 0 */
@@ -382,7 +414,7 @@ static void MX_RTC_Init(void)
 
   /** Enable the WakeUp
   */
-  if (HAL_RTCEx_SetWakeUpTimer(&hrtc, 30720, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
+  if (HAL_RTCEx_SetWakeUpTimer(&hrtc, 61440, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
   {
     Error_Handler();
   }
@@ -455,7 +487,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 9600;
+  huart1.Init.BaudRate = 19200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -526,20 +558,37 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(Rover_Button_GPIO_Port, Rover_Button_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LD3_Pin|BLE_wake_up_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PA5_unused_Pin P6A_unused_Pin */
-  GPIO_InitStruct.Pin = PA5_unused_Pin|P6A_unused_Pin;
+  /*Configure GPIO pins : PA5_unused_Pin PA6_unused_Pin */
+  GPIO_InitStruct.Pin = PA5_unused_Pin|PA6_unused_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD3_Pin BLE_wake_up_Pin */
-  GPIO_InitStruct.Pin = LD3_Pin|BLE_wake_up_Pin;
+  /*Configure GPIO pin : Rover_Button_Pin */
+  GPIO_InitStruct.Pin = Rover_Button_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(Rover_Button_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LD3_Pin */
+  GPIO_InitStruct.Pin = LD3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LD3_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : BLE_wake_up_Pin */
+  GPIO_InitStruct.Pin = BLE_wake_up_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+  HAL_GPIO_Init(BLE_wake_up_GPIO_Port, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -637,6 +686,10 @@ void format_data(uint8_t power_percentage, uint8_t sleep_mode, uint8_t data_flag
     if (data_flags & 0x04) {
         short int temperature = (short int)((temp_degC) * 100);  // Placeholder temperature scaled by 100
         short int humidity = (short int)(rh_pRH * 100); // Placeholder humidity scaled by 100
+
+//        short int temperature = (short int)((23.46) * 100);  // Placeholder temperature scaled by 100
+//        short int humidity = (short int)(45.12 * 100); // Placeholder humidity scaled by 100
+
         memcpy(&message[pos], &temperature, sizeof(temperature));
         pos += sizeof(temperature);
         memcpy(&message[pos], &humidity, sizeof(humidity));
@@ -646,6 +699,10 @@ void format_data(uint8_t power_percentage, uint8_t sleep_mode, uint8_t data_flag
     if (data_flags & 0x02) {
         short int light_data = ch0_both;  // Placeholder light data
         short int IR_data = ch1_IR;
+
+//        short int light_data = 315;  // Placeholder light data
+//        short int IR_data = 101;
+
         memcpy(&message[pos], &light_data, sizeof(light_data));
         pos += sizeof(light_data);
         memcpy(&message[pos], &IR_data, sizeof(IR_data));
@@ -653,28 +710,39 @@ void format_data(uint8_t power_percentage, uint8_t sleep_mode, uint8_t data_flag
     }
 
     if (data_flags & 0x01) {
-        short int vibration = (short int)(z_g * 100);  // Placeholder vibration data scaled by 100
+        short int vibration = (short int)(abs(z_g * 100));  // Placeholder vibration data scaled by 100
+
+//        short int vibration = (short int)(1.2 * 100);  // Placeholder vibration data scaled by 100
+
         memcpy(&message[pos], &vibration, sizeof(vibration));
         pos += sizeof(vibration);
     }
 
-    snprintf(formatted_data, format_data_length, "");
-    for (int i = 0; i < pos; i++) {
-    	// Add a space after each byte except the last one
-//    	if (i < pos - 1) {
-//    		snprintf(formatted_data, format_data_length, "%s %2X ",formatted_data, message[i]);
-//    	}
-//    	else {
-//    		snprintf(formatted_data, format_data_length, "%s %2X",formatted_data, message[i]);
-//    	}
-    	snprintf(formatted_data, format_data_length, "%s%2X",formatted_data, message[i]);
+    snprintf(formatted_data, lora_data_length, "");
+    //snprintf(formatted_data, lora_data_length, "8E07D003E8012C00FA00C8");
+
+    const int temp_length=4;
+    char temp[temp_length];
+    for (short int i = 0; i < pos; i++) {
+        snprintf(temp, temp_length, "%02X", message[i]);
+        strcat(formatted_data, temp);
     }
 
     // Transmit the buffer
     #if UART_DEBUG
     	printf("FORMATTED Data:\r\n");
-        HAL_UART_Transmit(&huart2, (uint8_t*) formatted_data, strlen(formatted_data), 100);
+    	printf("%s \r\n", formatted_data);
+        //HAL_UART_Transmit(&huart2, (uint8_t*) formatted_data, strlen(formatted_data), 100);
 	#endif
+}
+
+
+void setup_driving_pins(void){
+    HAL_GPIO_WritePin(Rover_Button_GPIO_Port, Rover_Button_Pin, GPIO_PIN_SET);
+//    HAL_GPIO_WritePin(Rover_Forward_GPIO_Port, Rover_Forward_Pin, GPIO_PIN_SET);
+//    HAL_GPIO_WritePin(Rover_Backward_GPIO_Port, Rover_Backward_Pin, GPIO_PIN_SET);
+//    HAL_GPIO_WritePin(Rover_Left_GPIO_Port, Rover_Left_Pin, GPIO_PIN_SET);
+//    HAL_GPIO_WritePin(Rover_Right_GPIO_Port, Rover_Right_Pin, GPIO_PIN_SET);
 }
 
 /* USER CODE END 4 */

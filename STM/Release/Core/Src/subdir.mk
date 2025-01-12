@@ -8,43 +8,43 @@ C_SRCS += \
 ../Core/Src/ADXL345.c \
 ../Core/Src/BLE.c \
 ../Core/Src/LTR_329.c \
+../Core/Src/LoRaWAN.c \
 ../Core/Src/main.c \
+../Core/Src/rover.c \
 ../Core/Src/stm32l4xx_hal_msp.c \
 ../Core/Src/stm32l4xx_it.c \
 ../Core/Src/stm_power.c \
 ../Core/Src/syscalls.c \
 ../Core/Src/sysmem.c \
-../Core/Src/system_stm32l4xx.c \
-../Core/Src/uart_lora.c \
-../Core/Src/uart_rover.c 
+../Core/Src/system_stm32l4xx.c 
 
 OBJS += \
 ./Core/Src/ADXL345.o \
 ./Core/Src/BLE.o \
 ./Core/Src/LTR_329.o \
+./Core/Src/LoRaWAN.o \
 ./Core/Src/main.o \
+./Core/Src/rover.o \
 ./Core/Src/stm32l4xx_hal_msp.o \
 ./Core/Src/stm32l4xx_it.o \
 ./Core/Src/stm_power.o \
 ./Core/Src/syscalls.o \
 ./Core/Src/sysmem.o \
-./Core/Src/system_stm32l4xx.o \
-./Core/Src/uart_lora.o \
-./Core/Src/uart_rover.o 
+./Core/Src/system_stm32l4xx.o 
 
 C_DEPS += \
 ./Core/Src/ADXL345.d \
 ./Core/Src/BLE.d \
 ./Core/Src/LTR_329.d \
+./Core/Src/LoRaWAN.d \
 ./Core/Src/main.d \
+./Core/Src/rover.d \
 ./Core/Src/stm32l4xx_hal_msp.d \
 ./Core/Src/stm32l4xx_it.d \
 ./Core/Src/stm_power.d \
 ./Core/Src/syscalls.d \
 ./Core/Src/sysmem.d \
-./Core/Src/system_stm32l4xx.d \
-./Core/Src/uart_lora.d \
-./Core/Src/uart_rover.d 
+./Core/Src/system_stm32l4xx.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -54,7 +54,7 @@ Core/Src/%.o Core/Src/%.su Core/Src/%.cyclo: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/ADXL345.cyclo ./Core/Src/ADXL345.d ./Core/Src/ADXL345.o ./Core/Src/ADXL345.su ./Core/Src/BLE.cyclo ./Core/Src/BLE.d ./Core/Src/BLE.o ./Core/Src/BLE.su ./Core/Src/LTR_329.cyclo ./Core/Src/LTR_329.d ./Core/Src/LTR_329.o ./Core/Src/LTR_329.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/stm32l4xx_hal_msp.cyclo ./Core/Src/stm32l4xx_hal_msp.d ./Core/Src/stm32l4xx_hal_msp.o ./Core/Src/stm32l4xx_hal_msp.su ./Core/Src/stm32l4xx_it.cyclo ./Core/Src/stm32l4xx_it.d ./Core/Src/stm32l4xx_it.o ./Core/Src/stm32l4xx_it.su ./Core/Src/stm_power.cyclo ./Core/Src/stm_power.d ./Core/Src/stm_power.o ./Core/Src/stm_power.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32l4xx.cyclo ./Core/Src/system_stm32l4xx.d ./Core/Src/system_stm32l4xx.o ./Core/Src/system_stm32l4xx.su ./Core/Src/uart_lora.cyclo ./Core/Src/uart_lora.d ./Core/Src/uart_lora.o ./Core/Src/uart_lora.su ./Core/Src/uart_rover.cyclo ./Core/Src/uart_rover.d ./Core/Src/uart_rover.o ./Core/Src/uart_rover.su
+	-$(RM) ./Core/Src/ADXL345.cyclo ./Core/Src/ADXL345.d ./Core/Src/ADXL345.o ./Core/Src/ADXL345.su ./Core/Src/BLE.cyclo ./Core/Src/BLE.d ./Core/Src/BLE.o ./Core/Src/BLE.su ./Core/Src/LTR_329.cyclo ./Core/Src/LTR_329.d ./Core/Src/LTR_329.o ./Core/Src/LTR_329.su ./Core/Src/LoRaWAN.cyclo ./Core/Src/LoRaWAN.d ./Core/Src/LoRaWAN.o ./Core/Src/LoRaWAN.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/rover.cyclo ./Core/Src/rover.d ./Core/Src/rover.o ./Core/Src/rover.su ./Core/Src/stm32l4xx_hal_msp.cyclo ./Core/Src/stm32l4xx_hal_msp.d ./Core/Src/stm32l4xx_hal_msp.o ./Core/Src/stm32l4xx_hal_msp.su ./Core/Src/stm32l4xx_it.cyclo ./Core/Src/stm32l4xx_it.d ./Core/Src/stm32l4xx_it.o ./Core/Src/stm32l4xx_it.su ./Core/Src/stm_power.cyclo ./Core/Src/stm_power.d ./Core/Src/stm_power.o ./Core/Src/stm_power.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32l4xx.cyclo ./Core/Src/system_stm32l4xx.d ./Core/Src/system_stm32l4xx.o ./Core/Src/system_stm32l4xx.su
 
 .PHONY: clean-Core-2f-Src
 

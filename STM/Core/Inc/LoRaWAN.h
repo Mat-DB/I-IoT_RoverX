@@ -16,8 +16,9 @@
 // Function definitions
 int LoRa_SendCommand_1000(char *command, char *expected);
 int LoRa_SendCommand(char *command, char *expected, uint32_t timeout);
-void LoRaWAN_Startup(void);
+void LoRaWAN_Startup(char send_EUIs);
 void LoRaWAN_Sleep(void);
-void LoRaWAN_Send_msg(char *data, int hex_1);
+void LoRaWAN_WakeUp(void);
+void LoRaWAN_Send_msg(char *data, uint8_t hex_1);
 
 #endif /* SRC_UART_LORA_H_ */

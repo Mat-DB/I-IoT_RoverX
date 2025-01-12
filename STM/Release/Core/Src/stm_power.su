@@ -1,3 +1,4 @@
-../Core/Src/stm_power.c:18:6:enterStandbyMode	8	static
-../Core/Src/stm_power.c:56:6:enterStandbyModeMaster	8	static
-../Core/Src/stm_power.c:76:6:enterStandbyMode10s	8	static
+../Core/Src/stm_power.c:21:6:enterStandbyModeMaster	8	static
+../Core/Src/stm_power.c:60:6:enterStandbyMode	8	static
+../Core/Src/stm_power.c:80:6:enterStandbyModeShort	8	static
+../Core/Src/stm_power.c:104:6:reset_i2c	8	static

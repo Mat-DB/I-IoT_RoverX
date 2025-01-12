@@ -5,14 +5,14 @@
  *      Author: matthias
  */
 
-#include "uart_lora.h"
+#include <LoRaWAN.h>
 
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 
 
 int LoRa_SendCommand_1000(char *command, char *expected) {
-	return LoRa_SendCommand(command, expected, 1000);
+	return LoRa_SendCommand(command, expected, 300);
 }
 
 
@@ -47,7 +47,7 @@ int LoRa_SendCommand(char *command, char *expected, uint32_t timeout) {
 }
 
 
-void LoRaWAN_Startup(void) {
+void LoRaWAN_Startup(char send_EUIs) {
 	#if UART_DEBUG
 		const uint8_t temp_length=120;
 		uint8_t temp[temp_length];
@@ -62,24 +62,29 @@ void LoRaWAN_Startup(void) {
 		prev_succes = 0;
 		snprintf(command, length, "AT\r\n");
 		snprintf(expect_rx, length, "+AT: OK");
-		if (LoRa_SendCommand_1000(command, expect_rx)) {
-			prev_succes = 1;
-			#if UART_DEBUG
-				HAL_Delay(UART_DELAY);
-				snprintf((char*) temp, temp_length, "AT successful!\r\n");
-				HAL_UART_Transmit(&huart2, temp, strlen((char*) temp), 100);
-			#endif
-		} else {
-			#if UART_DEBUG
-				HAL_Delay(UART_DELAY);
-				snprintf((char*) temp, temp_length, "AT failed!\r\n");
-				HAL_UART_Transmit(&huart2, temp, strlen((char*) temp), 100);
-			#endif
+		short int try_AT=0;
+		while(try_AT < 3 && !prev_succes) {
+			try_AT += 1;
+			if (LoRa_SendCommand_1000(command, expect_rx)) {
+				prev_succes = 1;
+				#if UART_DEBUG
+					HAL_Delay(UART_DELAY);
+					snprintf((char*) temp, temp_length, "AT successful!\r\n");
+					HAL_UART_Transmit(&huart2, temp, strlen((char*) temp), 100);
+				#endif
+			} else {
+				#if UART_DEBUG
+					HAL_Delay(UART_DELAY);
+					snprintf((char*) temp, temp_length, "AT failed!\r\n");
+					HAL_UART_Transmit(&huart2, temp, strlen((char*) temp), 100);
+				#endif
+			}
+			HAL_Delay(10);
 		}
 	}
 
 	// Set DevEUI
-	if (prev_succes) {
+	if (prev_succes && send_EUIs) {
 		prev_succes = 0;
 		snprintf(command, length, "AT+ID=DevEui\"70B3D57ED006C326\"\r\n");
 		snprintf(expect_rx, length, "+ID: DevEui,");
@@ -100,7 +105,7 @@ void LoRaWAN_Startup(void) {
 	}
 
 	// Set AppEUI
-	if (prev_succes) {
+	if (prev_succes && send_EUIs) {
 		prev_succes = 0;
 		snprintf(command, length, "AT+ID=AppEui,\"BB0B3CCAC02A0000\"\r\n");
 		snprintf(expect_rx, length, "+ID: AppEui,");
@@ -121,7 +126,7 @@ void LoRaWAN_Startup(void) {
 	}
 
 	// Set AppKey
-	if (prev_succes) {
+	if (prev_succes && send_EUIs) {
 		prev_succes = 0;
 		snprintf(command, length, "AT+KEY=APPKEY,\"6A5B74B4864C3EE02C1176C8B5C670BB\"\r\n");
 		snprintf(expect_rx, length, "+KEY: APPKEY");
@@ -142,7 +147,7 @@ void LoRaWAN_Startup(void) {
 	}
 
 	// Set Data Rate, DR
-	if (prev_succes) {
+	if (prev_succes && send_EUIs) {
 		prev_succes = 0;
 		snprintf(command, length, "AT+DR=EU868\r\n");
 		snprintf(expect_rx, length, "+DR: EU868");
@@ -163,7 +168,7 @@ void LoRaWAN_Startup(void) {
 	}
 
 	// Set CHannel frequency, CH
-	if (prev_succes) {
+	if (prev_succes && send_EUIs) {
 		prev_succes = 0;
 		snprintf(command, length, "AT+CH=NUM,0-2\r\n");
 		snprintf(expect_rx, length, "+CH: NUM");
@@ -184,7 +189,7 @@ void LoRaWAN_Startup(void) {
 	}
 
 	// Set mode to LWOTAA
-	if (prev_succes) {
+	if (prev_succes && send_EUIs) {
 		prev_succes = 0;
 		snprintf(command, length, "AT+MODE=LWOTAA\r\n");
 		snprintf(expect_rx, length, "+MODE: LWOTAA");
@@ -211,7 +216,7 @@ void LoRaWAN_Startup(void) {
 		snprintf(command, length, "AT+JOIN\r\n");
 		snprintf(expect_rx, length, "Network joined");
 
-		if (LoRa_SendCommand(command, expect_rx, 20000)) {
+		if (LoRa_SendCommand(command, expect_rx, 10000)) {
 			prev_succes = 1;
 			#if UART_DEBUG
 				HAL_Delay(UART_DELAY);
@@ -233,8 +238,33 @@ void LoRaWAN_Sleep(void){
 	LoRa_SendCommand_1000("AT+LOWPOWER\r\n", "+LOWPOWER: SLEEP");
 }
 
+void LoRaWAN_WakeUp(void) {
+	#if UART_DEBUG
+		const uint8_t temp_length=120;
+		uint8_t temp[temp_length];
+	#endif
+	const uint8_t length=64;
+	char command[length];
+	char expect_rx[length];
+	snprintf(command, length, "A");
+	snprintf(expect_rx, length, "WAKEUP");
+	if (LoRa_SendCommand_1000(command, expect_rx)) {
+		#if UART_DEBUG
+			HAL_Delay(UART_DELAY);
+			snprintf((char*) temp, temp_length, "Wake up successful!\r\n");
+			HAL_UART_Transmit(&huart2, temp, strlen((char*) temp), 100);
+		#endif
+	} else {
+		#if UART_DEBUG
+			HAL_Delay(UART_DELAY);
+			snprintf((char*) temp, temp_length, "Wake up failed!\r\n");
+			HAL_UART_Transmit(&huart2, temp, strlen((char*) temp), 100);
+		#endif
+	}
+}
 
-void LoRaWAN_Send_msg(char *data, int hex_1){
+
+void LoRaWAN_Send_msg(char *data, uint8_t hex_1){
 	#if UART_DEBUG
 		const uint8_t temp_length=120;
 		uint8_t temp[temp_length];
@@ -244,25 +274,25 @@ void LoRaWAN_Send_msg(char *data, int hex_1){
 	char expect_rx[length];
 
 	if (hex_1) {
-		snprintf(command, length, "AT+MSGHEX=\"%02X\"\r\n", (unsigned int) data);
-		sniprintf(expect_rx, length, "+MSG: Done");
-		if (LoRa_SendCommand(command, expect_rx, 20000)) {
+		snprintf(command, length, "AT+MSGHEX=\"%s\"\r\n", data);
+		sniprintf(expect_rx, length, "+MSGHEX: Done");
+		if (LoRa_SendCommand(command, expect_rx, 10000)) {
 			#if UART_DEBUG
 				HAL_Delay(UART_DELAY);
-				snprintf((char*) temp, temp_length, "Send data successful!\r\n");
+				snprintf((char*) temp, temp_length, "Send HEX data successful!\r\n");
 				HAL_UART_Transmit(&huart2, temp, strlen((char*) temp), 100);
 			#endif
 		} else {
 			#if UART_DEBUG
 				HAL_Delay(UART_DELAY);
-				snprintf((char*) temp, temp_length, "Data send failed!\r\n");
+				snprintf((char*) temp, temp_length, "HEX data send failed!\r\n");
 				HAL_UART_Transmit(&huart2, temp, strlen((char*) temp), 100);
 			#endif
 		}
 	} else {
 		snprintf(command, length, "AT+MSG=\"%s\"\r\n", data);
 		sniprintf(expect_rx, length, "+MSG: Done");
-		if (LoRa_SendCommand(command, expect_rx, 20000)) {
+		if (LoRa_SendCommand(command, expect_rx, 10000)) {
 			#if UART_DEBUG
 				HAL_Delay(UART_DELAY);
 				snprintf((char*) temp, temp_length, "Send data successful!\r\n");

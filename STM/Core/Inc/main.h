@@ -33,13 +33,21 @@ extern "C" {
 /* USER CODE BEGIN Includes */
 #define UART_DEBUG 1
 #define UART_DELAY 100
+
+#define lora_data_length 23
 // Set to 0 for master and 1 for slave!
+// baud rate lora 9600
+// baud rate rover 19200
 #define SLAVE 1
 #if SLAVE
 	#define BLE_I2C_ADDRESS 0x08 // Slave rover
 #else
-	#define BLE_I2C_ADDRESS 0x09 // Master rover
+	#define BLE_I2C_ADDRESS 0x08 // Master rover
 #endif
+
+//static void MX_USART1_UART_Init(void);
+
+
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -71,8 +79,10 @@ void Error_Handler(void);
 #define VCP_RX_GPIO_Port GPIOA
 #define PA5_unused_Pin GPIO_PIN_5
 #define PA5_unused_GPIO_Port GPIOA
-#define P6A_unused_Pin GPIO_PIN_6
-#define P6A_unused_GPIO_Port GPIOA
+#define PA6_unused_Pin GPIO_PIN_6
+#define PA6_unused_GPIO_Port GPIOA
+#define Rover_Button_Pin GPIO_PIN_7
+#define Rover_Button_GPIO_Port GPIOA
 #define SWDIO_Pin GPIO_PIN_13
 #define SWDIO_GPIO_Port GPIOA
 #define SWCLK_Pin GPIO_PIN_14
